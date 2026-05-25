@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co/rest/v1/";
+const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_bYuthBjlzvcoxPI3bEFXZA_tiWPTxNo";
 const BUCKET_NAME = "event-photos";
 const DASHBOARD_PASSWORD = "miri2024";
