@@ -11,21 +11,21 @@ const USE_MOCK = false;
 async function uploadPhoto(file, sessionId) {
     const ext = file.name.split(".").pop();
     const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}?upload=true`,
-        {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-                "Content-Type": file.type,
-                "x-upsert": "true",
-            },
-            body: file,
-        }
-    );
+
+    // Tritem fișierul direct (brut), fără FormData, și fără "?upload=true" în URL
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/event-photos/${filename}`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": file.type // Îi spunem serverului ce tip de imagine este (jpeg, png etc.)
+        },
+        body: file, // Trimitem direct fișierul, simplu!
+    });
+
     if (!res.ok) {
-        const err = await res.json();
-        throw new Error(JSON.stringify(err));
+        const errorText = await res.text();
+        console.error("Detalii eroare server:", errorText);
+        throw new Error("Upload eșuat");
     }
     return filename;
 }
