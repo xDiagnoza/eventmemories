@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import JSZip from "jszip"; // <--- ADAUGĂ ACEASTĂ LINIE
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
@@ -615,10 +616,47 @@ function Dashboard() {
     const totalMB = photos.reduce((a, p) => a + (p.metadata?.size || 0), 0) / 1024 / 1024;
 
     const downloadAll = async () => {
+        if (photos.length === 0) return;
         setDownloading(true);
-        await new Promise((r) => setTimeout(r, 1500));
-        alert("În producție: se descarcă un ZIP cu toate pozele.");
-        setDownloading(false);
+
+        try {
+            const zip = new JSZip();
+
+            // Dezactivăm temporar eroarea de CORS din browser descărcând pozele securizat
+            const downloadPromises = photos.map(async (photo) => {
+                try {
+                    const url = getPublicUrl(photo.name);
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error("Nu s-a putut lua poza de pe server");
+
+                    const blob = await response.blob();
+                    // Adăugăm poza în interiorul arhivei ZIP cu numele ei original
+                    zip.file(photo.name, blob);
+                } catch (err) {
+                    console.error(`Eroare la descărcarea pozei ${photo.name}:`, err);
+                }
+            });
+
+            // Așteptăm ca toate pozele să fie descărcate în memoria browserului
+            await Promise.all(downloadPromises);
+
+            // Generăm fișierul ZIP efectiv
+            const content = await zip.generateAsync({ type: "blob" });
+
+            // Creăm un link invizibil în pagină pentru a declanșa descărcarea în calculator/telefon
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(content);
+            link.download = `Amintiri_Nunta_${Date.now()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (error) {
+            console.error("Eroare la generarea ZIP-ului:", error);
+            alert("A apărut o problemă la împachetarea pozelor. Încearcă din nou.");
+        } finally {
+            setDownloading(false);
+        }
     };
 
     return (
