@@ -575,15 +575,34 @@ function Dashboard() {
   const [lightbox, setLightbox] = useState(null);
   const [downloading, setDownloading] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        if (USE_MOCK) { await new Promise((r) => setTimeout(r, 900)); setPhotos(MOCK_PHOTOS); }
-        else { const data = await listPhotos(); setPhotos(data || []); }
-      } catch { setPhotos(USE_MOCK ? MOCK_PHOTOS : []); }
-      finally { setLoading(false); }
-    })();
-  }, []);
+    useEffect(() => {
+        (async () => {
+            try {
+                if (USE_MOCK) {
+                    await new Promise((r) => setTimeout(r, 900));
+                    setPhotos(MOCK_PHOTOS);
+                } else {
+                    const data = await listPhotos();
+
+                    // Debugging: vedem exact ce ne întoarce serverul înainte să crăpăm în catch
+                    console.log("Răspuns brut de la Supabase:", data);
+
+                    // Ne asigurăm că primim un array valid
+                    if (Array.isArray(data)) {
+                        setPhotos(data);
+                    } else {
+                        setPhotos([]);
+                    }
+                }
+            } catch (err) {
+                // Dacă intră aici, vedem exact de ce a picat numărătoarea
+                console.error("Eroare la procesarea pozelor în Dashboard:", err);
+                setPhotos([]);
+            } finally {
+                setLoading(false);
+            }
+        })();
+    }, []);
 
   const uploaderCount = (() => {
     const s = new Set(photos.map((p) => { const pts = p.name.split("_"); return pts[0] + "_" + pts[1]; }));
