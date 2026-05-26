@@ -12,28 +12,7 @@ async function uploadPhoto(file, sessionId) {
     const ext = file.name.split(".").pop();
     const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // Tritem fișierul direct (brut), fără FormData, și fără "?upload=true" în URL
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/event-photos/${filename}`, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-            "Content-Type": file.type // Îi spunem serverului ce tip de imagine este (jpeg, png etc.)
-        },
-        body: file, // Trimitem direct fișierul, simplu!
-    });
-
-    if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Detalii eroare server:", errorText);
-        throw new Error("Upload eșuat");
-    }
-    return filename;
-}
-
-async function uploadPhoto(file, sessionId) {
-    const ext = file.name.split(".").pop();
-    const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
+    // Request direct prin Fetch, extrem de stabil și compatibil cu Vite build
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`, {
         method: "POST",
         headers: {
@@ -51,16 +30,39 @@ async function uploadPhoto(file, sessionId) {
     return filename;
 }
 
+async function listPhotos() {
+    // Request curat fără parametru extra în URL
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            id: BUCKET_NAME,
+            prefix: "",
+            limit: 100,
+            offset: 0
+        }),
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Eroare directă de la server la listare:", errorText);
+        throw new Error("Eroare la listare");
+    }
+    return await res.json();
+}
+
 function getPublicUrl(filename) {
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${filename}`;
 }
 
 const MOCK_PHOTOS = Array.from({ length: 18 }, (_, i) => ({
-  name: `session_inv${i % 6}_${Date.now()}_photo${i}.jpg`,
-  created_at: new Date(Date.now() - i * 180000).toISOString(),
-  metadata: { size: Math.floor(Math.random() * 4000000 + 800000) },
+    name: `session_inv${i % 6}_${Date.now()}_photo${i}.jpg`,
+    created_at: new Date(Date.now() - i * 180000).toISOString(),
+    metadata: { size: Math.floor(Math.random() * 4000000 + 800000) },
 }));
-
 // ─── FLOATING PETALS ─────────────────────────────────────────────────────────
 const PETAL_COUNT = 18;
 function Petals() {
