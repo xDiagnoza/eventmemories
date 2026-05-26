@@ -12,7 +12,7 @@ async function uploadPhoto(file, sessionId) {
     const ext = file.name.split(".").pop();
     const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const res = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`,
+        `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}?upload=true`,
         {
             method: "POST",
             headers: {
