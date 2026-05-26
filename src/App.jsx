@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import JSZip from "jszip"; // <--- ADAUGĂ ACEASTĂ LINIE
+import * as JSZip from "jszip"; // <--- ADAUGĂ ACEASTĂ LINIE
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
