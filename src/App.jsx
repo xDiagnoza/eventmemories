@@ -30,18 +30,29 @@ async function uploadPhoto(file, sessionId) {
     return filename;
 }
 
-async function listPhotos() {
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET_NAME}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ limit: 1000, offset: 0, prefix: "" }),
-  });
-  if (!res.ok) throw new Error("Eroare");
-  return await res.json();
+async function uploadPhoto(file, sessionId) {
+    const ext = file.name.split(".").pop();
+    const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+            "Content-Type": file.type
+        },
+        body: file,
+    });
+
+    if (!res.ok) {
+        const errorText = await res.text();
+        console.error("Detalii eroare server:", errorText);
+        throw new Error("Upload eșuat");
+    }
+    return filename;
 }
 
 function getPublicUrl(filename) {
-  return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${filename}`;
+    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${filename}`;
 }
 
 const MOCK_PHOTOS = Array.from({ length: 18 }, (_, i) => ({
