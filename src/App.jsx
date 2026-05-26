@@ -9,15 +9,25 @@ const USE_MOCK = false;
 
 // ─── SUPABASE ─────────────────────────────────────────────────────────────────
 async function uploadPhoto(file, sessionId) {
-  const ext = file.name.split(".").pop();
-  const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${SUPABASE_ANON_KEY}`, "Content-Type": file.type },
-    body: file,
-  });
-  if (!res.ok) throw new Error("Upload eșuat");
-  return filename;
+    const ext = file.name.split(".").pop();
+    const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+    const res = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+                "Content-Type": file.type,
+                "x-upsert": "true",
+            },
+            body: file,
+        }
+    );
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(JSON.stringify(err));
+    }
+    return filename;
 }
 
 async function listPhotos() {
