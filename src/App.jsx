@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import * as JSZip from "jszip"; // <--- ADAUGĂ ACEASTĂ LINIE
+
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
@@ -620,9 +620,20 @@ function Dashboard() {
         setDownloading(true);
 
         try {
-            const zip = new JSZip();
+            // Încărcăm dinamic JSZip direct dintr-o sursă sigură, ca să păcălim compilatorul la build
+            if (!window.JSZip) {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
 
-            // Dezactivăm temporar eroarea de CORS din browser descărcând pozele securizat
+            // Inițializăm librăria descărcată în mod global
+            const zip = new window.JSZip();
+
             const downloadPromises = photos.map(async (photo) => {
                 try {
                     const url = getPublicUrl(photo.name);
@@ -630,20 +641,16 @@ function Dashboard() {
                     if (!response.ok) throw new Error("Nu s-a putut lua poza de pe server");
 
                     const blob = await response.blob();
-                    // Adăugăm poza în interiorul arhivei ZIP cu numele ei original
                     zip.file(photo.name, blob);
                 } catch (err) {
                     console.error(`Eroare la descărcarea pozei ${photo.name}:`, err);
                 }
             });
 
-            // Așteptăm ca toate pozele să fie descărcate în memoria browserului
             await Promise.all(downloadPromises);
 
-            // Generăm fișierul ZIP efectiv
             const content = await zip.generateAsync({ type: "blob" });
 
-            // Creăm un link invizibil în pagină pentru a declanșa descărcarea în calculator/telefon
             const link = document.createElement("a");
             link.href = URL.createObjectURL(content);
             link.download = `Amintiri_Nunta_${Date.now()}.zip`;
@@ -653,7 +660,7 @@ function Dashboard() {
 
         } catch (error) {
             console.error("Eroare la generarea ZIP-ului:", error);
-            alert("A apărut o problemă la împachetarea pozelor. Încearcă din nou.");
+            alert("A apărut o problemă la descărcarea pozelor. Încearcă din nou.");
         } finally {
             setDownloading(false);
         }
