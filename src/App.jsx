@@ -620,7 +620,6 @@ function Dashboard() {
         setDownloading(true);
 
         try {
-            // Încărcăm dinamic JSZip direct dintr-o sursă sigură, ca să păcălim compilatorul la build
             if (!window.JSZip) {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement("script");
@@ -631,13 +630,20 @@ function Dashboard() {
                 });
             }
 
-            // Inițializăm librăria descărcată în mod global
             const zip = new window.JSZip();
 
             const downloadPromises = photos.map(async (photo) => {
                 try {
                     const url = getPublicUrl(photo.name);
-                    const response = await fetch(url);
+
+                    // REZOLVARE: Trimitem token-ul de autorizare ca să avem permisiunea de a citi fișierul brut din Storage
+                    const response = await fetch(url, {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+                        }
+                    });
+
                     if (!response.ok) throw new Error("Nu s-a putut lua poza de pe server");
 
                     const blob = await response.blob();
