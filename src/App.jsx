@@ -3,7 +3,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5va21kdHV1a2tnbXZpemR0bnVhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTcxOTcyMSwiZXhwIjoyMDk1Mjk1NzIxfQ.Q1gvdGWG5S4NGxHbbuctw9awShp22ePTTHA07n6_2QQ";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5va21kdHV1a2tnbXZpemR0bnVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MTk3MjEsImV4cCI6MjA5NTI5NTcyMX0.mMtbZvd76QxAIch5n5wki7PxaRs8WuhTYZqPCTrvars";
 const BUCKET_NAME = "event-photos";
 const DASHBOARD_PASSWORD = "miri2024";
 const USE_MOCK = false;
