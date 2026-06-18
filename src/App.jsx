@@ -295,11 +295,12 @@ function UploadPage() {
     const handleUpload = async () => {
         setUploading(true); setError("");
         try {
-            for (let i = 0; i < files.length; i++) {
-                if (USE_MOCK) await new Promise((r) => setTimeout(r, 500));
-                else await uploadPhoto(files[i], sessionId.current);
-                setProgress(Math.round(((i + 1) / files.length) * 100));
-            }
+            let completed = 0;
+            await Promise.all(files.map(async (file) => {
+                await uploadPhoto(file, event?.code || "general", sessionId.current);
+                completed++;
+                setProgress(Math.round((completed / files.length) * 100));
+            }));
             setDone(true);
         } catch {
             setError("Ceva n-a mers. Te rugăm să încerci din nou.");
@@ -307,6 +308,7 @@ function UploadPage() {
             setUploading(false);
         }
     };
+
 
     if (done) return (
         <div style={{ maxWidth: "460px", margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
