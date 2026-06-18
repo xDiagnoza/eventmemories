@@ -47,13 +47,14 @@ async function listPhotos(eventCode) {
     if (!res.ok) throw new Error("Eroare la listare");
     return await res.json();
 }
+
 function getPublicUrl(filename, eventCode) {
-    // URL-ul public trebuie să includă și folderul
+    // URL-ul public include acum și folderul dinamic în cale
     return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${eventCode}/${filename}`;
 }
 
 const MOCK_PHOTOS = Array.from({ length: 18 }, (_, i) => ({
-    name: `general/session_inv${i % 6}_${Date.now()}_photo${i}.jpg`,
+    name: `session_inv${i % 6}_${Date.now()}_photo${i}.jpg`, // curățat pentru mock consistent
     created_at: new Date(Date.now() - i * 180000).toISOString(),
     metadata: { size: Math.floor(Math.random() * 4000000 + 800000) },
 }));
@@ -241,7 +242,7 @@ function Nav({ view, setView, authed }) {
 }
 
 // ─── UPLOAD PAGE ────────────────────────────────────────────────=============
-function UploadPage({ event }) { // Presupunem că primești obiectul 'event' ca prop
+function UploadPage({ event }) {
     const [files, setFiles] = useState([]);
     const [previews, setPreviews] = useState([]);
     const [dragging, setDragging] = useState(false);
@@ -289,7 +290,6 @@ function UploadPage({ event }) { // Presupunem că primești obiectul 'event' ca
         setUploading(true); setError("");
         try {
             let completed = 0;
-            // Trimitem corect numele folderului extras din codul evenimentului curent
             const currentFolder = event?.code || "general";
 
             await Promise.all(files.map(async (file) => {
@@ -580,11 +580,12 @@ function PhotoCard({ src, meta, onClick, delay }) {
 }
 
 // ─── DASHBOARD FINALIZAT ──────────────────────────────────────────────────────
-function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru filtrare
+function Dashboard({ event }) {
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [lightbox, setLightbox] = useState(null);
     const [downloading, setDownloading] = useState(false);
+    const currentFolder = event?.code || "general";
 
     useEffect(() => {
         async function loadData() {
@@ -592,7 +593,6 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
                 if (USE_MOCK) {
                     setPhotos(MOCK_PHOTOS);
                 } else {
-                    const currentFolder = event?.code || "general";
                     const data = await listPhotos(currentFolder); // Listăm doar din folderul curent
                     console.log("Răspuns brut de la Supabase:", data);
                     if (Array.isArray(data)) {
@@ -616,13 +616,11 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
         }, 4000);
 
         return () => clearInterval(cronometru);
-    }, [event]);
+    }, [currentFolder]);
 
     const uploaderCount = (() => {
-        // Adaptat split-ul pentru că acum numele fișierului are folderul în față (ex: "general/id_timestamp...")
         const s = new Set(photos.map((p) => {
-            const numeFaraFolder = p.name.includes('/') ? p.name.split('/')[1] : p.name;
-            const pts = numeFaraFolder.split("_");
+            const pts = p.name.split("_");
             return pts[0] + "_" + pts[1];
         }));
         return s.size;
@@ -649,7 +647,8 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
 
             const downloadPromises = photos.map(async (photo) => {
                 try {
-                    const url = getPublicUrl(photo.name);
+                    // Adăugat corect currentFolder aici ca al doilea parametru
+                    const url = getPublicUrl(photo.name, currentFolder);
                     const response = await fetch(url, {
                         method: "GET",
                         headers: {
@@ -660,9 +659,7 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
                     if (!response.ok) throw new Error("Nu s-a putut lua poza de pe server");
 
                     const blob = await response.blob();
-                    // Curățăm numele fișierului de calea folderului ca să nu creeze submape în ZIP
-                    const numeCurat = photo.name.includes('/') ? photo.name.split('/').pop() : photo.name;
-                    zip.file(numeCurat, blob);
+                    zip.file(photo.name, blob);
                 } catch (err) {
                     console.error(`Eroare la descărcarea pozei ${photo.name}:`, err);
                 }
@@ -673,12 +670,13 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
 
             const link = document.createElement("a");
             link.href = URL.createObjectURL(content);
-            link.download = `Amintiri_${event?.code || "Eveniment"}_${Date.now()}.zip`;
+            link.download = `Amintiri_${currentFolder}_${Date.now()}.zip`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
 
         } catch (error) {
+            document.body.removeChild(link);
             console.error("Eroare la generarea ZIP-ului:", error);
             alert("A apărut o problemă la descărcarea pozelor. Încearcă din nou.");
         } finally {
@@ -693,48 +691,46 @@ function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru f
                     onClick={() => setLightbox(null)}
                     style={{ position: "fixed", inset: 0, background: "rgba(30,18,12,0.95)", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
-                    <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: "20px", right: "24px", background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "32px", cursor: "pointer" }}>×</button>
+                    <button onClick={() => setLightbox(null)} style={{ position: "absolute", top: "20px", right: "20px", background: "none", border: "none", color: "#fff", fontSize: "30px", cursor: "pointer" }}>×</button>
                     <img
-                        src={USE_MOCK ? `https://picsum.photos/seed/${lightbox + 10}/900/900` : getPublicUrl(photos[lightbox].name)}
+                        // Adăugat corect currentFolder pentru Lightbox
+                        src={USE_MOCK ? `https://picsum.photos/seed/${lightbox + 10}/900/900` : getPublicUrl(photos[lightbox].name, currentFolder)}
                         alt=""
-                        onClick={(e) => e.stopPropagation()}
-                        style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain" }}
+                        style={{ maxWidth: "95%", maxHeight: "90vh", objectFit: "contain", borderRadius: "8px" }}
                     />
                 </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "40px" }}>
-                <StatCard icon="📸" number={photos.length} label="Total Poze" delay="1" />
-                <StatCard icon="👥" number={uploaderCount} label="Invitați unici" delay="2" />
-                <StatCard icon="💾" number={`${totalMB.toFixed(1)} MB`} label="Spațiu utilizat" delay="3" />
-            </div>
-
             <div style={{ textAlign: "center", marginBottom: "40px" }}>
+                <h1 style={{ fontFamily: font.display, fontSize: "32px", color: T.ink, fontStyle: "italic" }}>Panoul Evenimentului: {currentFolder}</h1>
+                <p style={{ fontFamily: font.body, color: T.inkMid }}>Toate fotografiile încărcate de invitați în timp real.</p>
                 <button
-                    className="btn-primary"
-                    disabled={downloading || photos.length === 0}
                     onClick={downloadAll}
-                    style={{ padding: "14px 28px", borderRadius: "30px", border: "none", color: T.white, background: T.rose, cursor: "pointer" }}
+                    disabled={downloading || photos.length === 0}
+                    style={{ marginTop: "20px", padding: "12px 24px", background: T.rose, color: "#fff", border: "none", borderRadius: "20px", cursor: "pointer" }}
                 >
-                    {downloading ? "Se generează arhiva ZIP..." : "⚡ Descarcă toate pozele (.ZIP)"}
+                    {downloading ? "Se descarcă ZIP..." : `Descarcă toate cele ${photos.length} poze (ZIP)`}
                 </button>
             </div>
 
-            {loading ? (
-                <div style={{ textAlign: "center", color: T.inkMid, fontFamily: font.body }}>Se încarcă amintirile...</div>
-            ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "16px" }}>
-                    {photos.map((photo, index) => (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "16px" }}>
+                {loading ? (
+                    <p style={{ textAlign: "center", gridColumn: "1/-1" }}>Se încarcă amintirile...</p>
+                ) : photos.length === 0 ? (
+                    <p style={{ textAlign: "center", gridColumn: "1/-1" }}>Nicio poză încărcată în folderul "{currentFolder}".</p>
+                ) : (
+                    photos.map((photo, index) => (
                         <PhotoCard
                             key={photo.id || index}
-                            src={USE_MOCK ? `https://picsum.photos/seed/${index + 10}/400/400` : getPublicUrl(photo.name)}
-                            meta={`${((photo.metadata?.size || 0) / 1024 / 1024).toFixed(2)} MB`}
+                            // Adăugat corect currentFolder pentru grid-ul de poze
+                            src={USE_MOCK ? `https://picsum.photos/seed/${index + 10}/400/400` : getPublicUrl(photo.name, currentFolder)}
+                            meta={`${(photo.metadata?.size ? photo.metadata.size / 1024 / 1024 : 0).toFixed(1)} MB`}
                             onClick={() => setLightbox(index)}
                             delay={index * 0.05}
                         />
-                    ))}
-                </div>
-            )}
+                    ))
+                )}
+            </div>
         </div>
     );
 }
