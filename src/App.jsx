@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 
-
 // ─── CONFIG ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://nokmdtuukkgmvizdtnua.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5va21kdHV1a2tnbXZpemR0bnVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MTk3MjEsImV4cCI6MjA5NTI5NTcyMX0.mMtbZvd76QxAIch5n5wki7PxaRs8WuhTYZqPCTrvars";
@@ -8,12 +7,15 @@ const BUCKET_NAME = "event-photos";
 const DASHBOARD_PASSWORD = "miri2024";
 const USE_MOCK = false;
 
-// ─── SUPABASE ─────────────────────────────────────────────────────────────────
-async function uploadPhoto(file, sessionId) {
+// ─── SUPABASE MODIFICAT PENTRU FOLDERE DINAMICE ───────────────────────────────
+async function uploadPhoto(file, folderName, sessionId) {
     const ext = file.name.split(".").pop();
     const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${filename}`, {
+    // VARIANTĂ INCLUSĂ: Am adăugat folderName în calea URL-ului (Supabase creează automat folderul)
+    const caleaCompleta = `${folderName}/${filename}`;
+
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${caleaCompleta}`, {
         method: "POST",
         headers: {
             Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
@@ -27,11 +29,11 @@ async function uploadPhoto(file, sessionId) {
         console.error("Detalii eroare server:", errorText);
         throw new Error("Upload eșuat");
     }
-    return filename;
+    return caleaCompleta; // Returnăm întreaga cale (folder/fisier)
 }
 
-async function listPhotos() {
-    // REZOLVARE EROARE 404: Am adăugat /${BUCKET_NAME} la finalul URL-ului de listare
+// Actualizat ca să listeze pozele dintr-un folder specific sau global
+async function listPhotos(folderName = "") {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET_NAME}`, {
         method: "POST",
         headers: {
@@ -39,10 +41,10 @@ async function listPhotos() {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            prefix: "",
+            prefix: folderName ? `${folderName}/` : "", // Filtrează după folderul evenimentului curent
             limit: 100,
             offset: 0,
-            sortBy: { column: "name", order: "desc" } // Opțional: aduce pozele noi primele
+            sortBy: { column: "name", order: "desc" }
         }),
     });
 
@@ -54,12 +56,12 @@ async function listPhotos() {
     return await res.json();
 }
 
-function getPublicUrl(filename) {
-    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${filename}`;
+function getPublicUrl(caleCompleta) {
+    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${caleCompleta}`;
 }
 
 const MOCK_PHOTOS = Array.from({ length: 18 }, (_, i) => ({
-    name: `session_inv${i % 6}_${Date.now()}_photo${i}.jpg`,
+    name: `general/session_inv${i % 6}_${Date.now()}_photo${i}.jpg`,
     created_at: new Date(Date.now() - i * 180000).toISOString(),
     metadata: { size: Math.floor(Math.random() * 4000000 + 800000) },
 }));
@@ -247,7 +249,7 @@ function Nav({ view, setView, authed }) {
 }
 
 // ─── UPLOAD PAGE ────────────────────────────────────────────────=============
-function UploadPage() {
+function UploadPage({ event }) { // Presupunem că primești obiectul 'event' ca prop
     const [files, setFiles] = useState([]);
     const [previews, setPreviews] = useState([]);
     const [dragging, setDragging] = useState(false);
@@ -266,7 +268,6 @@ function UploadPage() {
         }
         setFiles((p) => [...p, ...valid]);
         valid.forEach((f) => {
-            // Reducem dimensiunea preview la 400px pentru performanță
             const img = new Image();
             const url = URL.createObjectURL(f);
             img.onload = () => {
@@ -296,19 +297,22 @@ function UploadPage() {
         setUploading(true); setError("");
         try {
             let completed = 0;
+            // Trimitem corect numele folderului extras din codul evenimentului curent
+            const currentFolder = event?.code || "general";
+
             await Promise.all(files.map(async (file) => {
-                await uploadPhoto(file, event?.code || "general", sessionId.current);
+                await uploadPhoto(file, currentFolder, sessionId.current);
                 completed++;
                 setProgress(Math.round((completed / files.length) * 100));
             }));
             setDone(true);
-        } catch {
+        } catch (err) {
+            console.error(err);
             setError("Ceva n-a mers. Te rugăm să încerci din nou.");
         } finally {
             setUploading(false);
         }
     };
-
 
     if (done) return (
         <div style={{ maxWidth: "460px", margin: "0 auto", padding: "80px 24px", textAlign: "center" }}>
@@ -583,21 +587,21 @@ function PhotoCard({ src, meta, onClick, delay }) {
     );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────────────────
-function Dashboard() {
+// ─── DASHBOARD FINALIZAT ──────────────────────────────────────────────────────
+function Dashboard({ event }) { // Am adăugat prop-ul 'event' și aici pentru filtrare
     const [photos, setPhotos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [lightbox, setLightbox] = useState(null);
     const [downloading, setDownloading] = useState(false);
 
-    // REZOLVARE TIMP REAL & REÎMPRĂȘTARE DATELOR
     useEffect(() => {
         async function loadData() {
             try {
                 if (USE_MOCK) {
                     setPhotos(MOCK_PHOTOS);
                 } else {
-                    const data = await listPhotos();
+                    const currentFolder = event?.code || "general";
+                    const data = await listPhotos(currentFolder); // Listăm doar din folderul curent
                     console.log("Răspuns brut de la Supabase:", data);
                     if (Array.isArray(data)) {
                         setPhotos(data);
@@ -613,20 +617,22 @@ function Dashboard() {
             }
         }
 
-        // Încarcă datele imediat ce se deschide dashboard-ul
         loadData();
 
-        // Setează un Auto-Refresh silențios la fiecare 4 secunde (Păstrează aplicația vie și sincronizată)
         const cronometru = setInterval(() => {
             loadData();
         }, 4000);
 
-        // Oprește intervalul când mirii părăsesc pagina
         return () => clearInterval(cronometru);
-    }, []);
+    }, [event]);
 
     const uploaderCount = (() => {
-        const s = new Set(photos.map((p) => { const pts = p.name.split("_"); return pts[0] + "_" + pts[1]; }));
+        // Adaptat split-ul pentru că acum numele fișierului are folderul în față (ex: "general/id_timestamp...")
+        const s = new Set(photos.map((p) => {
+            const numeFaraFolder = p.name.includes('/') ? p.name.split('/')[1] : p.name;
+            const pts = numeFaraFolder.split("_");
+            return pts[0] + "_" + pts[1];
+        }));
         return s.size;
     })();
 
@@ -652,8 +658,6 @@ function Dashboard() {
             const downloadPromises = photos.map(async (photo) => {
                 try {
                     const url = getPublicUrl(photo.name);
-
-                    // REZOLVARE: Trimitem token-ul de autorizare ca să avem permisiunea de a citi fișierul brut din Storage
                     const response = await fetch(url, {
                         method: "GET",
                         headers: {
@@ -664,19 +668,20 @@ function Dashboard() {
                     if (!response.ok) throw new Error("Nu s-a putut lua poza de pe server");
 
                     const blob = await response.blob();
-                    zip.file(photo.name, blob);
+                    // Curățăm numele fișierului de calea folderului ca să nu creeze submape în ZIP
+                    const numeCurat = photo.name.includes('/') ? photo.name.split('/').pop() : photo.name;
+                    zip.file(numeCurat, blob);
                 } catch (err) {
                     console.error(`Eroare la descărcarea pozei ${photo.name}:`, err);
                 }
             });
 
             await Promise.all(downloadPromises);
-
             const content = await zip.generateAsync({ type: "blob" });
 
             const link = document.createElement("a");
             link.href = URL.createObjectURL(content);
-            link.download = `Amintiri_Nunta_${Date.now()}.zip`;
+            link.download = `Amintiri_${event?.code || "Eveniment"}_${Date.now()}.zip`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -690,7 +695,7 @@ function Dashboard() {
     };
 
     return (
-        <>
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "40px 24px" }}>
             {lightbox !== null && (
                 <div
                     onClick={() => setLightbox(null)}
@@ -701,112 +706,43 @@ function Dashboard() {
                         src={USE_MOCK ? `https://picsum.photos/seed/${lightbox + 10}/900/900` : getPublicUrl(photos[lightbox].name)}
                         alt=""
                         onClick={(e) => e.stopPropagation()}
-                        style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain", borderRadius: "12px", boxShadow: "0 20px 80px rgba(0,0,0,0.6)" }}
+                        style={{ maxWidth: "88vw", maxHeight: "88vh", objectFit: "contain" }}
                     />
-                    <div style={{ position: "absolute", bottom: "24px", left: "50%", transform: "translateX(-50%)", fontFamily: font.body, fontSize: "12px", color: "rgba(255,255,255,0.4)", letterSpacing: "0.1em" }}>
-                        {lightbox + 1} / {photos.length}
-                    </div>
                 </div>
             )}
 
-            <div style={{ maxWidth: "1080px", margin: "0 auto", padding: "48px 24px 80px", position: "relative", zIndex: 1 }}>
-                <div className="fade-up" style={{ textAlign: "center", marginBottom: "48px" }}>
-                    <div style={{ fontFamily: font.body, fontSize: "11px", letterSpacing: "0.22em", textTransform: "uppercase", color: T.gold, marginBottom: "14px" }}>
-                        ✦ &nbsp; galeria voastră &nbsp; ✦
-                    </div>
-                    <h1 style={{ fontFamily: font.display, fontSize: "clamp(32px, 6vw, 54px)", fontWeight: 400, fontStyle: "italic", color: T.ink, marginBottom: "12px", lineHeight: 1.1 }}>
-                        Amintirile de la nuntă
-                    </h1>
-                    <Divider style={{ maxWidth: "260px", margin: "0 auto 16px" }} />
-                    <p style={{ fontFamily: font.body, fontSize: "14px", color: T.inkMid, fontWeight: 300 }}>
-                        Toate momentele prețioase, adunate cu drag de invitații voștri.
-                    </p>
-                </div>
-
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginBottom: "40px" }}>
-                    <StatCard number={photos.length} label="Amintiri primite" icon="🌸" delay={1} />
-                    <StatCard number={uploaderCount} label="Inimi contribuite" icon="♡" delay={2} />
-                    <StatCard number={`${totalMB.toFixed(1)}`} label="MB de amintiri" icon="✦" delay={3} />
-                </div>
-
-                <div style={{ textAlign: "center", marginBottom: "40px" }}>
-                    <button
-                        className="btn-primary"
-                        onClick={downloadAll}
-                        disabled={downloading || photos.length === 0}
-                        style={{
-                            background: downloading || photos.length === 0 ? T.rosePale : `linear-gradient(135deg, ${T.rose} 0%, #a06040 100%)`,
-                            color: downloading || photos.length === 0 ? T.inkLight : T.white,
-                            border: "none", borderRadius: "50px",
-                            padding: "14px 36px", fontFamily: font.body, fontSize: "12px",
-                            letterSpacing: "0.14em", textTransform: "uppercase",
-                            cursor: downloading || photos.length === 0 ? "not-allowed" : "pointer",
-                            transition: "all 0.25s", boxShadow: `0 4px 16px rgba(184,121,90,0.2)`,
-                        }}
-                    >
-                        {downloading ? "Se pregătește..." : "↓ Descarcă toate pozele (ZIP)"}
-                    </button>
-                </div>
-
-                {loading ? (
-                    <div style={{ textAlign: "center", padding: "80px 0" }}>
-                        <div className="shimmer" style={{ fontFamily: font.display, fontSize: "22px", fontStyle: "italic", color: T.inkLight }}>
-                            Se încarcă amintirile voastre...
-                        </div>
-                    </div>
-                ) : photos.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "80px 0" }}>
-                        <div style={{ fontSize: "40px", marginBottom: "16px" }}>🌿</div>
-                        <div style={{ fontFamily: font.display, fontSize: "20px", fontStyle: "italic", color: T.inkMid }}>Nicio poză încă. În curând...</div>
-                    </div>
-                ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px" }}>
-                        {photos.map((photo, i) => (
-                            <PhotoCard
-                                key={photo.name}
-                                src={USE_MOCK ? `https://picsum.photos/seed/${i + 20}/400/400` : getPublicUrl(photo.name)}
-                                meta={photo.created_at ? new Date(photo.created_at).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : ""}
-                                onClick={() => setLightbox(i)}
-                                delay={Math.min(i * 0.04, 0.6)}
-                            />
-                        ))}
-                    </div>
-                )}
-
-                {photos.length > 0 && (
-                    <Divider style={{ marginTop: "48px" }} />
-                )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "20px", marginBottom: "40px" }}>
+                <StatCard icon="📸" number={photos.length} label="Total Poze" delay="1" />
+                <StatCard icon="👥" number={uploaderCount} label="Invitați unici" delay="2" />
+                <StatCard icon="💾" number={`${totalMB.toFixed(1)} MB`} label="Spațiu utilizat" delay="3" />
             </div>
-        </>
-    );
-}
 
-// ─── APP ──────────────────────────────────────────────────────────────────────
-export default function App() {
-    const [view, setView] = useState("upload");
-    const [authed, setAuthed] = useState(false);
+            <div style={{ textAlign: "center", marginBottom: "40px" }}>
+                <button
+                    className="btn-primary"
+                    disabled={downloading || photos.length === 0}
+                    onClick={downloadAll}
+                    style={{ padding: "14px 28px", borderRadius: "30px", border: "none", color: T.white, background: T.rose, cursor: "pointer" }}
+                >
+                    {downloading ? "Se generează arhiva ZIP..." : "⚡ Descarcă toate pozele (.ZIP)"}
+                </button>
+            </div>
 
-    const handleSetView = (v) => {
-        if (v === "dashboard" && !authed) setView("login");
-        else setView(v);
-    };
-
-    return (
-        <div style={{
-            fontFamily: font.body,
-            background: `radial-gradient(ellipse at 20% 0%, rgba(212,163,115,0.12) 0%, transparent 50%),
-                   radial-gradient(ellipse at 80% 100%, rgba(184,121,90,0.08) 0%, transparent 50%),
-                   ${T.cream}`,
-            minHeight: "100vh",
-            color: T.ink,
-        }}>
-            <FontLoader />
-            <Petals />
-            <Nav view={view} setView={handleSetView} authed={authed} />
-
-            {view === "upload" && <UploadPage />}
-            {view === "login" && <LoginPage onLogin={() => { setAuthed(true); setView("dashboard"); }} />}
-            {view === "dashboard" && <Dashboard />}
+            {loading ? (
+                <div style={{ textAlign: "center", color: T.inkMid, fontFamily: font.body }}>Se încarcă amintirile...</div>
+            ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "16px" }}>
+                    {photos.map((photo, index) => (
+                        <PhotoCard
+                            key={photo.id || index}
+                            src={USE_MOCK ? `https://picsum.photos/seed/${index + 10}/400/400` : getPublicUrl(photo.name)}
+                            meta={`${((photo.metadata?.size || 0) / 1024 / 1024).toFixed(2)} MB`}
+                            onClick={() => setLightbox(index)}
+                            delay={index * 0.05}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
