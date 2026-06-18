@@ -260,11 +260,26 @@ function UploadPage() {
 
     const addFiles = (newFiles) => {
         const valid = Array.from(newFiles).filter((f) => f.type.startsWith("image/"));
+        if (valid.length > 20) {
+            alert("Poți selecta maxim 20 de poze odată.");
+            return;
+        }
         setFiles((p) => [...p, ...valid]);
         valid.forEach((f) => {
-            const r = new FileReader();
-            r.onload = (e) => setPreviews((p) => [...p, e.target.result]);
-            r.readAsDataURL(f);
+            // Reducem dimensiunea preview la 400px pentru performanță
+            const img = new Image();
+            const url = URL.createObjectURL(f);
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const max = 400;
+                const ratio = Math.min(max / img.width, max / img.height);
+                canvas.width = img.width * ratio;
+                canvas.height = img.height * ratio;
+                canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+                setPreviews((p) => [...p, canvas.toDataURL("image/jpeg", 0.7)]);
+                URL.revokeObjectURL(url);
+            };
+            img.src = url;
         });
     };
 
