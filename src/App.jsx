@@ -8,12 +8,12 @@ const DASHBOARD_PASSWORD = "miri2024";
 const USE_MOCK = false;
 
 // ─── SUPABASE MODIFICAT PENTRU FOLDERE DINAMICE ───────────────────────────────
-async function uploadPhoto(file, folderName, sessionId) {
+async function uploadPhoto(file, eventCode, sessionId) {
     const ext = file.name.split(".").pop();
     const filename = `${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // VARIANTĂ INCLUSĂ: Am adăugat folderName în calea URL-ului (Supabase creează automat folderul)
-    const caleaCompleta = `${folderName}/${filename}`;
+    // Calea va deveni: event-photos / nunta-maria / nume_poza.jpg
+    const caleaCompleta = `${eventCode}/${filename}`;
 
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/${BUCKET_NAME}/${caleaCompleta}`, {
         method: "POST",
@@ -24,16 +24,12 @@ async function uploadPhoto(file, folderName, sessionId) {
         body: file,
     });
 
-    if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Detalii eroare server:", errorText);
-        throw new Error("Upload eșuat");
-    }
-    return caleaCompleta; // Returnăm întreaga cale (folder/fisier)
+    if (!res.ok) throw new Error("Upload eșuat");
+    return filename;
 }
 
 // Actualizat ca să listeze pozele dintr-un folder specific sau global
-async function listPhotos(folderName = "") {
+async function listPhotos(eventCode) {
     const res = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET_NAME}`, {
         method: "POST",
         headers: {
@@ -41,23 +37,19 @@ async function listPhotos(folderName = "") {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            prefix: folderName ? `${folderName}/` : "", // Filtrează după folderul evenimentului curent
+            prefix: `${eventCode}/`, // Îi spunem să ne arate doar pozele din folderul ăsta
             limit: 100,
             offset: 0,
             sortBy: { column: "name", order: "desc" }
         }),
     });
 
-    if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Eroare directă de la server la listare:", errorText);
-        throw new Error("Eroare la listare");
-    }
+    if (!res.ok) throw new Error("Eroare la listare");
     return await res.json();
 }
-
-function getPublicUrl(caleCompleta) {
-    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${caleCompleta}`;
+function getPublicUrl(filename, eventCode) {
+    // URL-ul public trebuie să includă și folderul
+    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${eventCode}/${filename}`;
 }
 
 const MOCK_PHOTOS = Array.from({ length: 18 }, (_, i) => ({
